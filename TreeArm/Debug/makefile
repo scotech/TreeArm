@@ -10,6 +10,7 @@ GEN_OPTS__FLAG :=
 GEN_CMDS__FLAG := 
 
 ORDERED_OBJS += \
+"./load_buffer.obj" \
 "./main.obj" \
 "./tm4c123gh6pge_startup_ccs.obj" \
 "./drivers/cfal96x64x16.obj" \
@@ -159,8 +160,9 @@ TreeArm.hex: $(EXE_OUTPUTS)
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "main.obj" "tm4c123gh6pge_startup_ccs.obj" "drivers\cfal96x64x16.obj" 
+	-$(RM) "load_buffer.obj" "main.obj" "tm4c123gh6pge_startup_ccs.obj" "drivers\cfal96x64x16.obj" 
 	-$(RM) "main.d" "tm4c123gh6pge_startup_ccs.d" "drivers\cfal96x64x16.d" 
+	-$(RM) "load_buffer.d" 
 	-@echo 'Finished clean'
 	-@echo ' '
 
