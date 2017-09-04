@@ -13,7 +13,11 @@ ORDERED_OBJS += \
 "./load_buffer.obj" \
 "./main.obj" \
 "./tm4c123gh6pge_startup_ccs.obj" \
+"./drivers/buttons.obj" \
 "./drivers/cfal96x64x16.obj" \
+"./drivers/slidemenuwidget.obj" \
+"./drivers/stripchartwidget.obj" \
+"./drivers/usb_sound.obj" \
 "../tm4c123gh6pge.cmd" \
 $(GEN_CMDS__FLAG) \
 -llibc.a \
@@ -160,8 +164,8 @@ TreeArm.hex: $(EXE_OUTPUTS)
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "load_buffer.obj" "main.obj" "tm4c123gh6pge_startup_ccs.obj" "drivers\cfal96x64x16.obj" 
-	-$(RM) "main.d" "tm4c123gh6pge_startup_ccs.d" "drivers\cfal96x64x16.d" 
+	-$(RM) "load_buffer.obj" "main.obj" "tm4c123gh6pge_startup_ccs.obj" "drivers\buttons.obj" "drivers\cfal96x64x16.obj" "drivers\slidemenuwidget.obj" "drivers\stripchartwidget.obj" "drivers\usb_sound.obj" 
+	-$(RM) "main.d" "tm4c123gh6pge_startup_ccs.d" "drivers\buttons.d" "drivers\cfal96x64x16.d" "drivers\slidemenuwidget.d" "drivers\stripchartwidget.d" "drivers\usb_sound.d" 
 	-$(RM) "load_buffer.d" 
 	-@echo 'Finished clean'
 	-@echo ' '

@@ -39,7 +39,11 @@
 //*****************************************************************************************
 //  Definitions
 //*****************************************************************************************
-#define TIMER0LOAD          0x007A1200    //Load Value for Timer0, 1 Hz at 80 MHz Sys Clock
+#define TIMER0LOAD          0x00082355//0x007A1200    //Load Value for Timer0, 1 Hz at 80 MHz Sys Clock
+#define red_start           64
+#define green_start         128
+#define blue_start          192
+
 #define LED_SIZE            100
 #define UART_BUF_SIZE       96
 #define MAX_FRAMES          100
@@ -395,9 +399,9 @@ void init_LEDS(void)
 //******************************************************************************
 int main(void)
 {
-    uint8_t red_sine = 0;
-    uint8_t green_sine = 88;
-    uint8_t blue_sine = 200;
+    uint8_t red_sine = red_start;
+    uint8_t green_sine = green_start;
+    uint8_t blue_sine = blue_start;
 
 //
 //Peripheral setup

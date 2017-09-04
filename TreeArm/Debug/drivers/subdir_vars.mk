@@ -6,21 +6,45 @@ SHELL = cmd.exe
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-C:/ti/TivaWare_C_Series-2.1.4.178/examples/boards/dk-tm4c123g/drivers/cfal96x64x16.c 
+../drivers/buttons.c \
+../drivers/cfal96x64x16.c \
+../drivers/slidemenuwidget.c \
+../drivers/stripchartwidget.c \
+../drivers/usb_sound.c 
 
 C_DEPS += \
-./drivers/cfal96x64x16.d 
+./drivers/buttons.d \
+./drivers/cfal96x64x16.d \
+./drivers/slidemenuwidget.d \
+./drivers/stripchartwidget.d \
+./drivers/usb_sound.d 
 
 OBJS += \
-./drivers/cfal96x64x16.obj 
+./drivers/buttons.obj \
+./drivers/cfal96x64x16.obj \
+./drivers/slidemenuwidget.obj \
+./drivers/stripchartwidget.obj \
+./drivers/usb_sound.obj 
 
 OBJS__QUOTED += \
-"drivers\cfal96x64x16.obj" 
+"drivers\buttons.obj" \
+"drivers\cfal96x64x16.obj" \
+"drivers\slidemenuwidget.obj" \
+"drivers\stripchartwidget.obj" \
+"drivers\usb_sound.obj" 
 
 C_DEPS__QUOTED += \
-"drivers\cfal96x64x16.d" 
+"drivers\buttons.d" \
+"drivers\cfal96x64x16.d" \
+"drivers\slidemenuwidget.d" \
+"drivers\stripchartwidget.d" \
+"drivers\usb_sound.d" 
 
 C_SRCS__QUOTED += \
-"C:/ti/TivaWare_C_Series-2.1.4.178/examples/boards/dk-tm4c123g/drivers/cfal96x64x16.c" 
+"../drivers/buttons.c" \
+"../drivers/cfal96x64x16.c" \
+"../drivers/slidemenuwidget.c" \
+"../drivers/stripchartwidget.c" \
+"../drivers/usb_sound.c" 
 
 
