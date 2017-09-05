@@ -1,6 +1,6 @@
 //*****************************************************************************************
 //  Embedded System Design Using ARM Technology
-//  Extra Credit Lab - ADC
+//  Final Project - Tree ARM
 //  Author: Nicholas Scoville
 //  File: main.c
 //*****************************************************************************************
@@ -39,7 +39,7 @@
 //*****************************************************************************************
 //  Definitions
 //*****************************************************************************************
-#define TIMER0LOAD          0x00082355//0x007A1200    //Load Value for Timer0, 1 Hz at 80 MHz Sys Clock
+#define TIMER0LOAD          0x007A1200  //0x00082355    //Load Value for Timer0, 1 Hz at 80 MHz Sys Clock
 #define red_start           64
 #define green_start         128
 #define blue_start          192
@@ -76,6 +76,7 @@ const uint8_t sine_wave[256] =
           0x37, 0x39, 0x3C, 0x3F, 0x41, 0x44, 0x47, 0x4A, 0x4D, 0x4F, 0x52,
           0x55, 0x58, 0x5B, 0x5E, 0x61, 0x64, 0x67, 0x6A, 0x6D, 0x70, 0x74,
           0x77, 0x7A, 0x7D };
+
 const uint8_t gamma[] =
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
           0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
