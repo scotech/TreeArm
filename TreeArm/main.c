@@ -35,22 +35,30 @@
 #include "utils/ustdlib.c"
 #include "driverlib/timer.h"
 #include "driverlib/interrupt.h"
+#include "drivers/buttons.h"
 
 //*****************************************************************************************
 //  Definitions
 //*****************************************************************************************
-#define TIMER0LOAD          0x007A1200  //0x00082355    //Load Value for Timer0, 1 Hz at 80 MHz Sys Clock
-#define red_start           64
-#define green_start         128
-#define blue_start          192
+#define TIMER0LOAD          0x007A1200  //Load Value for Timer0, 2 Hz at 80 MHz Sys Clock
+#define TIMER1LOAD          0x003D0900  //Load Value for Timer1, 20 Hz at 80 MHz Sys Clock
+#define red_start           64          //Starting index value for red sine wave
+#define green_start         128         //Starting index value for green sine wave
+#define blue_start          192         //Starting index value for blue sine wave
+#define LED_SIZE            100         //Number of RGB leds in light strand
+#define UART_BUF_SIZE       96          //Size of buffer in bytes for UART ping pong
+#define FPS                 60          //Number of times a second to refresh the lights
+#define BAUD_RATE           9600000     //Baud rate for UART = ~800kb/s to the lights
 
-#define LED_SIZE            100
-#define UART_BUF_SIZE       96
-#define MAX_FRAMES          100
-#define FPS                 60
-#define BAUD_RATE           9600000
+//
+//  Assembly function to load TX Buffers from the LED buffer
+//
 extern void __load_buffer(uint8_t * source_r, uint8_t * source_g,
                           uint8_t * source_b, uint8_t * buffer);
+
+//
+// Sine wave table
+//
 const uint8_t sine_wave[256] =
         { 0x80, 0x83, 0x86, 0x89, 0x8C, 0x90, 0x93, 0x96, 0x99, 0x9C, 0x9F,
           0xA2, 0xA5, 0xA8, 0xAB, 0xAE, 0xB1, 0xB3, 0xB6, 0xB9, 0xBC, 0xBF,
@@ -77,6 +85,9 @@ const uint8_t sine_wave[256] =
           0x55, 0x58, 0x5B, 0x5E, 0x61, 0x64, 0x67, 0x6A, 0x6D, 0x70, 0x74,
           0x77, 0x7A, 0x7D };
 
+//
+// Gamma correction table for leds
+//
 const uint8_t gamma[] =
         { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
           0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
@@ -97,16 +108,16 @@ const uint8_t gamma[] =
 //*****************************************************************************************
 //  Global Variables
 //*****************************************************************************************
-bool Service_SysTick = false;   //Flag for SysTick Interrupt Service
-bool Service_Timer0 = false;
-static uint8_t LEDBufA[3][LED_SIZE];
-static uint8_t LEDBufB[3][LED_SIZE];
-static uint8_t TxBufA[UART_BUF_SIZE];
-static uint8_t TxBufB[UART_BUF_SIZE];
-static uint32_t uDMAErrCount = 0;
-static uint32_t num_frames = 0;
+bool Service_SysTick = false;           //Flag for SysTick Interrupt Service
+bool Service_Timer0 = false;            //Flag for Timer0 Interrupt Service
+bool Service_Timer1 = false;            //Flag for Timer1 Interrupt Service
+static uint8_t LEDBufA[3][LED_SIZE];    //Buffer holding RGB values for all leds
+static uint8_t TxBufA[UART_BUF_SIZE];   //Tx Buffer A for UART uDMA ping pong
+static uint8_t TxBufB[UART_BUF_SIZE];   //Tx Buffer B for UART uDMA ping pong
+static uint32_t uDMAErrCount = 0;       //Error counter for uDMA errors
+static uint32_t tx_sent = 0;
 static int count = 0;
-static char str[32];               //String to format results
+static char str[32];                    //String to format results
 static tContext sContext;
 
 //*****************************************************************************
@@ -127,26 +138,52 @@ uint8_t ui8ControlTable[1024] __attribute__ ((aligned(1024)));
 
 //*****************************************************************************************
 //  Function:       Timer0IntHandler
-//  Description:    Interrupt Handler for Timer 0
+//  Description:    Interrupt Handler for Timer 0 - used for drawing to LED buffer
 //  Parameters:     None
 //  Return:         None
 //*****************************************************************************************
 void Timer0IntHandler(void)
 {
     TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT); //Clear Timer0 Interrupt Flag
-    IntMasterDisable();                                 //Disable Interrupts
-    Service_Timer0 = true;
-    IntMasterEnable();
+    IntMasterDisable();                             //Disable Interrupts
+    Service_Timer0 = true;                          //Set Service flag
+    IntMasterEnable();                              //Enable Interrupts
 }
 
+//*****************************************************************************************
+//  Function:       Timer1IntHandler
+//  Description:    Interrupt Handler for Timer 1 - used for polling buttons
+//  Parameters:     None
+//  Return:         None
+//*****************************************************************************************
+void Timer1IntHandler(void)
+{
+    TimerIntClear(TIMER1_BASE, TIMER_TIMA_TIMEOUT); //Clear Timer1 Interrupt Flag
+    IntMasterDisable();                             //Disable Interrupts
+    Service_Timer1 = true;                          //Set Service flag
+    IntMasterEnable();                              //Enable Interrupts
+}
+
+//*****************************************************************************************
+//  Function:       SysTickIntHandler
+//  Description:    Interrupt Handler for System Tick - used for sending frames to the leds
+//  Parameters:     None
+//  Return:         None
+//*****************************************************************************************
 void SysTickHandler(void)
 {
-    IntMasterDisable();                                 //Disable Interrupts
-    Service_SysTick = true;
-    count += 1;
-    IntMasterEnable();
+    IntMasterDisable();         //Disable Interrupts
+    Service_SysTick = true;     //Set Service flag
+    count += 1;                 //Increment frame counter
+    IntMasterEnable();          //Enable Interrupts
 }
 
+//*****************************************************************************************
+//  Function:       uDMAErrorHandler
+//  Description:    Interrupt Handler for uDMA errors
+//  Parameters:     None
+//  Return:         None
+//*****************************************************************************************
 void uDMAErrorHandler(void)
 {
     uint32_t ui32Status;
@@ -181,7 +218,7 @@ void UART4IntHandler(void)
     UARTIntClear(UART4_BASE, UARTStatus);
 
     IntMasterDisable();
-    if (num_frames && (num_frames <= MAX_FRAMES))
+    if (tx_sent && (tx_sent <= LED_SIZE))
     {
         uDMAModeA = uDMAChannelModeGet(UDMA_CHANNEL_TMR0B | UDMA_PRI_SELECT);
         uDMAModeB = uDMAChannelModeGet(UDMA_CHANNEL_TMR0B | UDMA_ALT_SELECT);
@@ -189,29 +226,28 @@ void UART4IntHandler(void)
         if (uDMAModeA == UDMA_MODE_STOP)
         {
 
-            __load_buffer(&LEDBufA[0][num_frames], &LEDBufA[1][num_frames],
-                          &LEDBufA[2][num_frames], TxBufA);
-            num_frames += 4;
+            __load_buffer(&LEDBufA[0][tx_sent], &LEDBufA[1][tx_sent],
+                          &LEDBufA[2][tx_sent], TxBufA);
+            tx_sent += 4;
             uDMAChannelTransferSet(UDMA_CHANNEL_TMR0B | UDMA_PRI_SELECT,
             UDMA_MODE_PINGPONG,
                                    TxBufA, (void *) (UART4_BASE),
                                    UART_BUF_SIZE);
-
         }
         else if (uDMAModeB == UDMA_MODE_STOP)
         {
-            __load_buffer(&LEDBufA[0][num_frames], &LEDBufA[1][num_frames],
-                          &LEDBufA[2][num_frames], TxBufB);
-            num_frames += 4;
+            __load_buffer(&LEDBufA[0][tx_sent], &LEDBufA[1][tx_sent],
+                          &LEDBufA[2][tx_sent], TxBufB);
+            tx_sent += 4;
             uDMAChannelTransferSet(
             UDMA_CHANNEL_TMR0B | UDMA_ALT_SELECT,
                                    UDMA_MODE_PINGPONG, TxBufB,
                                    (void *) (UART4_BASE), UART_BUF_SIZE);
         }
     }
-    else if (num_frames > MAX_FRAMES)
+    else if (tx_sent > LED_SIZE)
     {
-        num_frames = 0;
+        tx_sent = 0;
         uDMAChannelDisable(UDMA_CHANNEL_TMR0B);
     }
     IntMasterEnable();
@@ -225,13 +261,13 @@ void UART4IntHandler(void)
 //******************************************************************************
 void send_frame(void)
 {
-    num_frames = 0;
-    __load_buffer(&LEDBufA[0][num_frames], &LEDBufA[1][num_frames],
-                  &LEDBufA[2][num_frames], TxBufA);
-    num_frames += 4;
-    __load_buffer(&LEDBufA[0][num_frames], &LEDBufA[1][num_frames],
-                  &LEDBufA[2][num_frames], TxBufB);
-    num_frames += 4;
+    tx_sent = 0;
+    __load_buffer(&LEDBufA[0][tx_sent], &LEDBufA[1][tx_sent],
+                  &LEDBufA[2][tx_sent], TxBufA);
+    tx_sent += 4;
+    __load_buffer(&LEDBufA[0][tx_sent], &LEDBufA[1][tx_sent],
+                  &LEDBufA[2][tx_sent], TxBufB);
+    tx_sent += 4;
     uDMAChannelTransferSet(UDMA_CHANNEL_TMR0B | UDMA_PRI_SELECT,
     UDMA_MODE_PINGPONG,
                            TxBufA, (void *) (UART4_BASE), UART_BUF_SIZE);
@@ -250,7 +286,7 @@ void send_frame(void)
 void init_clock(void)
 {
     //
-    //Setup System Clock and System Tick to 40Mhz and 60Hz
+    //Setup System Clock to 80MHz and System Tick SystemClock/FPS (60Hz)
     //
     SysCtlClockSet(
     SYSCTL_SYSDIV_2 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
@@ -289,6 +325,7 @@ void init_gpio(void)
     SysCtlPeripheralSleepEnable(SYSCTL_PERIPH_GPIOJ);
     GPIOPinTypeUART(GPIO_PORTJ_BASE, GPIO_PIN_0 | GPIO_PIN_1);
     GPIOPinConfigure((GPIO_PJ0_U4RX | GPIO_PJ1_U4TX));
+    ButtonsInit();
 }
 
 //******************************************************************************
@@ -342,7 +379,6 @@ void init_uDMA(void)
     uDMAChannelControlSet(UDMA_CHANNEL_TMR0B | UDMA_ALT_SELECT,
     UDMA_SIZE_8 | UDMA_SRC_INC_8 | UDMA_DST_INC_NONE |
     UDMA_ARB_4);
-
 }
 
 //******************************************************************************
@@ -373,26 +409,6 @@ void init_timer(void)
 }
 
 //******************************************************************************
-//  Function:       init_LEDS
-//  Description:    Initialize RGB values to 0 for both LED Buffers
-//  Parameters:     None
-//  Return:         None
-//******************************************************************************
-void init_LEDS(void)
-{
-    int i;
-    for (i = 0; i < LED_SIZE; i++)
-    {
-        LEDBufA[0][i] = 0x00;
-        LEDBufB[0][i] = 0x00;
-        LEDBufA[1][i] = 0x00;
-        LEDBufB[1][i] = 0x00;
-        LEDBufA[2][i] = 0x00;
-        LEDBufB[2][i] = 0x00;
-    }
-}
-
-//******************************************************************************
 //  Function:       Main
 //  Description:    Main function for TreeArm Project
 //  Parameters:     None
@@ -400,9 +416,12 @@ void init_LEDS(void)
 //******************************************************************************
 int main(void)
 {
-    uint8_t red_sine = red_start;
-    uint8_t green_sine = green_start;
-    uint8_t blue_sine = blue_start;
+    uint8_t red_sine = red_start;       //red sine wave table index
+    uint8_t green_sine = green_start;   //green sine wave table index
+    uint8_t blue_sine = blue_start;     //blue sine wave table index
+    int8_t red_diff = 1;              //red sine wave +- speed value
+    int8_t green_diff = 1;            //green sine wave +- speed value
+    int8_t blue_diff = 1;             //blue sine wave +- speed value
 
 //
 //Peripheral setup
@@ -413,41 +432,88 @@ int main(void)
     init_gpio();
     init_UART();
     init_timer();
-    init_LEDS();
 
     sprintf(str, "Clock: %d", SysCtlClockGet());   //format result string
     GrStringDrawCentered(&sContext, str, -1,
                          GrContextDpyWidthGet(&sContext) / 2, 15, 1); //Draw line 1
     IntMasterEnable();                                  //Enable Interrupts
-
+//
+//Main loop used to service SysTick and Timer0
+//
     while (1)
     {
         if (Service_SysTick)
         {
-            IntMasterDisable();                             //Disable Interrupts
-            Service_SysTick = false;     //Reset Timer0 Interrupt Service Flag
-            IntMasterEnable();
+            IntMasterDisable();                  //Disable Interrupts
+            Service_SysTick = false;       //Reset Timer0 Interrupt Service Flag
+            IntMasterEnable();                   //Enable Interrupts
             sprintf(str, "Frames: %d", count);   //format result string
             GrStringDrawCentered(&sContext, str, -1,
                                  GrContextDpyWidthGet(&sContext) / 2, 25, 1); //Draw line 1
-            send_frame();
+            send_frame();                  //Start sending a frame to the strand
         }
         else if (Service_Timer0)
         {
-            IntMasterDisable();                             //Disable Interrupts
+            uint8_t i, buttons, buttons_diff;
+            IntMasterDisable();         //Disable Interrupts
             Service_Timer0 = false;     //Reset Timer0 Interrupt Service Flag
-            IntMasterEnable();
-            uint8_t i;     //, my_red, my_green, my_blue;
-            //my_red = sine_wave[red_sine];
-            //my_green = sine_wave[green_sine];
-            //my_blue = sine_wave[blue_sine];
+            IntMasterEnable();          //Enable Interrupts
+            buttons = ButtonsPoll(&buttons_diff, NULL);
+            buttons = buttons & buttons_diff; //only want to know about buttons that just turned on
+            switch (buttons)
+            {
+            case 0:
+            {
+                break;
+            }
+            case UP_BUTTON:
+            {
+                red_diff +=1;
+                break;
+            }
+            case DOWN_BUTTON:
+            {
+                green_diff +=1;
+                break;
+            }
+            case RIGHT_BUTTON:
+            {
+                blue_diff +=1;
+                break;
+            }
+            case LEFT_BUTTON:
+            {
+                //
+                //Reset colors to initial values
+                //
+                red_sine = red_start;
+                green_sine = green_start;
+                blue_sine = blue_start;
+                red_diff = 1;
+                green_diff = 1;
+                blue_diff = 1;
+                break;
+            }
+            case SELECT_BUTTON:
+            {
+
+                break;
+            }
+            default:
+            {
+                break;
+            }
+            }
+            //
+            //update buffer with new sine wave portions for each color
+            //
             for (i = 0; i < LED_SIZE; i++)
             {
                 LEDBufA[0][i] = gamma[sine_wave[(red_sine + i) % 256]];
                 LEDBufA[1][i] = gamma[sine_wave[(green_sine + i) % 256]];
                 LEDBufA[2][i] = gamma[sine_wave[(blue_sine + i) % 256]];
             }
-            sprintf(str, "R: %d", red_sine);   //format result string
+            sprintf(str, "R: %d", buttons);   //format result string
             GrStringDrawCentered(&sContext, str, -1,
                                  GrContextDpyWidthGet(&sContext) / 2, 35, 1); //Draw line 1
             sprintf(str, "G: %d", green_sine);   //format result string
@@ -456,9 +522,16 @@ int main(void)
             sprintf(str, "B: %d", blue_sine);   //format result string
             GrStringDrawCentered(&sContext, str, -1,
                                  GrContextDpyWidthGet(&sContext) / 2, 55, 1); //Draw line 1
-            red_sine -= 1;
-            green_sine -= 1;
-            blue_sine -= 1;
+            red_sine -= red_diff;
+            green_sine -= green_diff;
+            blue_sine -= blue_diff;
+        }
+        else if(Service_Timer1)
+        {
+            IntMasterDisable();         //Disable Interrupts
+            Service_Timer1 = false;     //Reset Timer1 Interrupt Service Flag
+            IntMasterEnable();          //Enable Interrupts
+            ButtonsPoll(NULL, NULL);    //Pole buttons for proper debouncing
         }
     }
     return 0;

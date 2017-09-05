@@ -55,6 +55,7 @@ extern uint32_t __STACK_TOP;
 //
 //*****************************************************************************
 extern void Timer0IntHandler(void); //Interrupt handler for Timer 0 Interrupt
+extern void Timer1IntHandler(void); //Interrupt handler for Timer 0 Interrupt
 extern void SysTickHandler(void);
 extern void UART4IntHandler(void);
 extern void uDMAErrorHandler(void);
@@ -107,7 +108,7 @@ void (* const g_pfnVectors[])(void) =
     IntDefaultHandler,                      // Watchdog timer
     Timer0IntHandler,                      // Timer 0 subtimer A
     IntDefaultHandler,                      // Timer 0 subtimer B
-    IntDefaultHandler,                      // Timer 1 subtimer A
+    Timer1IntHandler,                      // Timer 1 subtimer A
     IntDefaultHandler,                      // Timer 1 subtimer B
     IntDefaultHandler,                      // Timer 2 subtimer A
     IntDefaultHandler,                      // Timer 2 subtimer B
