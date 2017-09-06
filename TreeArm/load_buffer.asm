@@ -1,35 +1,41 @@
 ;//*****************************************************************************************
 ;//  Embedded System Design Using ARM Technology
-;//  Lab 7 - Bubble Sort
+;//  Final Project - Tree ARM
 ;//  Author: Nicholas Scoville
-;//  File: BubSort.asm
+;//  File: load_buffer.asm
 ;//*****************************************************************************************
 
 ;//*****************************************************************************************
-;//  Function:      __BubSort
+;//  Function:      __load_buffer
 
-;//  Description:   Sort Array (A) with (N) elements using the Bubble Sort Algorithm
-;//  Parameters:    r0 = (A) Address of Array
-;//					r1 = (N) Number of Array Elements
+;//  Description:   load buffer (BUF) with RGB values from LED array (R_ADR, G_ADR, B_ADR)
+;//  Parameters:    r0 = (R_ADR) Address of R values
+;//					r1 = (G_ADR) Address of G values
+;//					r2 = (B_ADR) Address of B values
+;//					r3 = (BUF)	Buffer to write encoded RGB values to
 ;//  Return:        None
 ;//*****************************************************************************************
 
 ;//Register definitions for caller arguments
-	.define		r0, R_ADR		;	register to hold starting address of Array (A)
-	.define		r1, G_ADR		;	register to hold Number of Array Elements (N)
-	.define		r2, B_ADR		;
-	.define		r3, BUF		;
+	.define		r0, R_ADR		;	register to hold address of Red values
+	.define		r1, G_ADR		;	register to hold address of Green values
+	.define		r2, B_ADR		;	register to hold address of Blue values
+	.define		r3, BUF			;	register to hold address of BUF
 
 ;//Register definitions for function variables
-	.define		r4, RED		;	register to hold first Array Element to be compared
-	.define		r5, GREEN		;	register to hold first Array Element to be compared
-	.define		r6, BLUE		;	register to hold swapped flag
-	.define		r7, ZERO		;	register to hold loop count
-	.define		r8, ONE		;	register to hold calculated top address of Array(A)
-	.define		r9, TMP		;	register to hold temp value for swapping
+	.define		r4, RED			;	register to hold Red values to be tested
+	.define		r5, GREEN		;	register to hold Green values to be tested
+	.define		r6, BLUE		;	register to hold Blue values to be tested
+	.define		r7, ZERO		;	register to representation of 0 bit for BUF
+	.define		r8, ONE			;	register to representation of 1 bit for BUF
+	.define		r9, TMP			;	register to hold temp value for testing
 
 	.global __load_buffer
 
+
+;//Function checks each bit of each byte and loads the output buffer with the appropriate
+;//bytes to represent 0's and 1's at the UART output.  0xFE represents a zero and 0xF0 a one.
+;//The bytes also have to be reverse.
 __load_buffer:
 	STMFD	sp!, {RED,GREEN,BLUE,ZERO,ONE,TMP}	;	Save Registers used by function
 	LDR		RED, [R_ADR]
@@ -39,7 +45,7 @@ __load_buffer:
 	MOV		ONE, #0xF0
 	MOV		TMP, #1
 	ADD		BUF, #7
-loop1
+loop1	;//led 1
 	TST		GREEN, TMP
 	ITE		EQ
 	STRBEQ	ZERO, [BUF, #8]
@@ -57,7 +63,7 @@ next1
 	TST		TMP, #0x100
 	BEQ		loop1
 	ADD		BUF, #32
-loop2
+loop2	;//led 2
 	TST		GREEN, TMP
 	ITE		EQ
 	STRBEQ	ZERO, [BUF, #8]
@@ -75,7 +81,7 @@ next2
 	TST		TMP, #0x10000
 	BEQ		loop2
 	ADD		BUF, #32
-loop3
+loop3	;//led 3
 	TST		GREEN, TMP
 	ITE		EQ
 	STRBEQ	ZERO, [BUF, #8]
@@ -93,7 +99,7 @@ next3
 	TST		TMP, #0x1000000
 	BEQ		loop3
 	ADD		BUF, #32
-loop4
+loop4	;//led 4
 	TST		GREEN, TMP
 	ITE		EQ
 	STRBEQ	ZERO, [BUF, #8]
@@ -111,5 +117,4 @@ next4
 	BNE		loop4
 return
 	LDMFD	sp!, {RED,GREEN,BLUE,ZERO,ONE,TMP}	;	Restore Registers used by function
-	BX		lr				;	Return
-
+	BX		lr									;	Return
